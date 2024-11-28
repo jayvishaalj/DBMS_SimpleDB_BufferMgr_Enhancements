@@ -166,6 +166,59 @@ public class BufferMgrTest {
         // Attempt to pin a fourth block without unpinning any (should timeout)
         bufferMgr.pin(block4);
     }
+
+    @Test
+    public void testLRUKReplacementPolicyUpdated() {
+        // Pin 3 blocks (fills the buffer pool)
+        Buffer buffer1 = bufferMgr.pin(block1);
+        bufferMgr.unpin(buffer1);
+
+        Buffer buffer2 = bufferMgr.pin(block2);
+        bufferMgr.unpin(buffer2);
+
+        Buffer buffer3 = bufferMgr.pin(block3);
+        bufferMgr.unpin(buffer3);
+
+        // Access block1 and block2 again to update their access history
+        bufferMgr.pin(block1);
+        bufferMgr.unpin(buffer1);
+
+        bufferMgr.pin(block2);
+        bufferMgr.unpin(buffer2);
+
+        // Pin block4 (causing replacement of buffer with block3)
+        Buffer buffer4 = bufferMgr.pin(block4);
+        assertEquals(block4, buffer4.block());
+        assertNull(bufferMgr.findExistingBuffer(block3)); // Ensure block3 has been replaced // mine
+
+        // Try to pin block3 again
+        Buffer bufferForBlock3 = bufferMgr.pin(block3);
+        bufferMgr.unpin(bufferForBlock3); // mine
+
+        // Ensure block3 is now assigned to a new or reassigned buffer
+        assertNotSame(buffer4, bufferForBlock3); // Ensure block4's buffer is not reused for block3
+        assertNull(bufferMgr.findExistingBuffer(block1)); // Ensure block1 is not in the buffer // mine
+        assertEquals(block3, bufferForBlock3.block()); // Ensure block3 is now in the buffer
+
+        // Access block2 again to update access history // mine
+        Buffer bufferForBlock2 = bufferMgr.pin(block2);
+        bufferMgr.unpin(bufferForBlock2);
+
+        assertEquals(block2, bufferForBlock2.block()); // Ensure block2 is still in the buffer // mine
+
+        // Access block3 again to update access history // mine
+        Buffer currentBufferForBlock3 = bufferMgr.pin(block3);
+        bufferMgr.unpin(currentBufferForBlock3);
+
+        assertEquals(block3, currentBufferForBlock3.block()); // Ensure block3 is still in the buffer // mine
+
+        // Pin block1 (causing replacement of buffer with block4) // mine
+        Buffer bufferForBlock1 = bufferMgr.pin(block1);
+        bufferMgr.unpin(bufferForBlock1);
+
+        assertNull(bufferMgr.findExistingBuffer(block2)); // Ensure block2 is not in the buffer // mine
+        assertEquals(block1, bufferForBlock1.block()); // Ensure block1 is in the buffer // mine
+    }
 }
 
 

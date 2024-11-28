@@ -20,11 +20,15 @@ public class Buffer {
    private int pins = 0;
    private int txnum = -1;
    private int lsn = -1;
+   public Buffer next;
+   public Buffer prev;
 
    public Buffer(FileMgr fm, LogMgr lm) {
       this.fm = fm;
       this.lm = lm;
       contents = new Page(fm.blockSize());
+      this.next = null;
+      this.prev = null;
    }
    
    public Page contents() {
