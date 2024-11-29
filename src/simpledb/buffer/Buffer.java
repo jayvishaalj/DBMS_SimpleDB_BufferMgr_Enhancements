@@ -22,6 +22,7 @@ public class Buffer {
    private int lsn = -1;
    public Buffer next;
    public Buffer prev;
+   public Boolean dirty;
 
    public Buffer(FileMgr fm, LogMgr lm) {
       this.fm = fm;
@@ -29,6 +30,8 @@ public class Buffer {
       contents = new Page(fm.blockSize());
       this.next = null;
       this.prev = null;
+      this.dirty = false;
+      
    }
    
    public Page contents() {
@@ -44,7 +47,8 @@ public class Buffer {
       return blk;
    }
 
-   public void setModified(int txnum, int lsn) {
+   public synchronized void setModified(int txnum, int lsn) {
+	   this.dirty = true;
       this.txnum = txnum;
       if (lsn >= 0)
          this.lsn = lsn;
@@ -55,11 +59,16 @@ public class Buffer {
     * (that is, if it has a nonzero pin count).
     * @return true if the buffer is pinned
     */
-   public boolean isPinned() {
+   public synchronized boolean isPinned() {
       return pins > 0;
    }
    
-   public int modifyingTx() {
+   // Method to check if the buffer is dirty
+   public synchronized boolean isDirty() {
+       return dirty;
+   }
+   
+   public synchronized int modifyingTx() {
       return txnum;
    }
 
@@ -70,7 +79,7 @@ public class Buffer {
     * are first written to disk.
     * @param b a reference to the data block
     */
-   void assignToBlock(BlockId b) {
+   synchronized void assignToBlock(BlockId b) {
       flush();
       blk = b;
       fm.read(blk, contents);
@@ -80,25 +89,26 @@ public class Buffer {
    /**
     * Write the buffer to its disk block if it is dirty.
     */
-   void flush() {
+   synchronized void flush() {
       if (txnum >= 0) {
          lm.flush(lsn);
          fm.write(blk, contents);
          txnum = -1;
+         dirty = false;
       }
    }
 
    /**
     * Increase the buffer's pin count.
     */
-   void pin() {
+   synchronized void pin() {
       pins++;
    }
 
    /**
     * Decrease the buffer's pin count.
     */
-   void unpin() {
+   synchronized void unpin() {
       pins--;
    }
 }

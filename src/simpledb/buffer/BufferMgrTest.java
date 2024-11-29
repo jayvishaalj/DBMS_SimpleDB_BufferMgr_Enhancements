@@ -166,6 +166,80 @@ public class BufferMgrTest {
         // Attempt to pin a fourth block without unpinning any (should timeout)
         bufferMgr.pin(block4);
     }
+    
+    @Test
+    public void testPinnedBuffersNotEvicted() {
+        // Pin 3 blocks
+        Buffer buffer1 = bufferMgr.pin(block1);
+        Buffer buffer2 = bufferMgr.pin(block2);
+        Buffer buffer3 = bufferMgr.pin(block3);
+
+        // Unpin only block2 and block3
+        bufferMgr.unpin(buffer2);
+        bufferMgr.unpin(buffer3);
+
+        // Pin block4 (requires eviction)
+        Buffer buffer4 = bufferMgr.pin(block4);
+
+        // Ensure block1 is not evicted as it is still pinned
+        assertNotNull(bufferMgr.findExistingBuffer(block1));
+        assertEquals(block4, buffer4.block());
+    }
+
+    
+    @Test
+    public void testBackwardDistanceUpdate() {
+        // Pin and unpin blocks to update backward distances
+        bufferMgr.pin(block1);
+        bufferMgr.unpin(bufferMgr.findExistingBuffer(block1));
+
+        bufferMgr.pin(block2);
+        bufferMgr.unpin(bufferMgr.findExistingBuffer(block2));
+
+        bufferMgr.pin(block1); // Second access for block1
+        bufferMgr.unpin(bufferMgr.findExistingBuffer(block1));
+
+        // Check that backward distances are updated correctly
+        assertTrue(bufferMgr.backwardDist.get(block1) > 0);
+        assertEquals(Double.POSITIVE_INFINITY, bufferMgr.backwardDist.get(block2), 0.0);
+    }
+    
+    @Test
+    public void testFlushDirtyBuffersBeforeEviction() {
+        // Pin block1 and mark it as dirty
+        Buffer buffer1 = bufferMgr.pin(block1);
+        buffer1.setModified(1, 1); // Mark as dirty
+        bufferMgr.unpin(buffer1);
+
+        // Pin block2
+        Buffer buffer2 = bufferMgr.pin(block2);
+        bufferMgr.unpin(buffer2);
+
+        // Pin block3
+        Buffer buffer3 = bufferMgr.pin(block3);
+        bufferMgr.unpin(buffer3);
+
+        // Pin block4 (requires eviction of a dirty buffer)
+        Buffer buffer4 = bufferMgr.pin(block4);
+        bufferMgr.unpin(buffer4);
+
+        // Ensure block1 was flushed and evicted
+        assertNull(bufferMgr.findExistingBuffer(block1)); // Block1 should not be in the buffer pool
+        assertEquals(block4, buffer4.block());           // Block4 should be in the buffer pool
+    }
+
+
+    @Test
+    public void testAccessPatternStress() {
+        for (int i = 1; i <= 1000; i++) {
+            BlockId block = new BlockId("stressfile", i % 10); // Reuse blocks
+            bufferMgr.pin(block);
+            bufferMgr.unpin(bufferMgr.findExistingBuffer(block));
+        }
+
+        assertTrue(bufferMgr.available() > 0); // Ensure some buffers are available
+    }
+
 
     @Test
     public void testLRUKReplacementPolicyUpdated() {
